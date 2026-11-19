@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "每日经济学 · 图解学习手记",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2QShBxaLsFiH+AnFf5XfWgvh9PlceXlgBQtp/nh3GnR4HylkhmnN9QHe+ghEPlIAN0TeBS/lz0H+pmeKSaOm+5AzQQRumTpdYgrC68RwToSefFEx8/FLRbIcc8OgLUOnHbgdBFbUhxO/19sFXNqmy4or/KWCPT9haAgtG8woPo6pizNzY1ComjSASlbI/ec55HCtxpX2H7QcPt4I9X/SBF5U0SGE8Mr7OPrvf48K6uHnIBktZ+M4964P5BZwcMp7sAJaxQv6bN0tEw6TWZkd92i7ABEpgzNEbhS8KJP4sjJsLWDmtmabWNKz5n4JpMBX+6mOgnT3VEbjqNSw5wujewIDAQAB",
+  "description": "每天打开一篇经济学图解。阅读生活案例、学科地图和来自官方渠道的政策与数据。",
+  "action": {"default_title": "打开每日经济学"},
+  "icons": {"16": "assets/icon-16.png", "48": "assets/icon-48.png", "128": "assets/icon-128.png"},
+  "background": {"service_worker": "background.js"},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; frame-ancestors 'none'"},
+  "host_permissions": ["https://www.mof.gov.cn/*", "https://www.stats.gov.cn/*", "https://www.gov.uk/*", "https://www.federalreserve.gov/*"]
+}

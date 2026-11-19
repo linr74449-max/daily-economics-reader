@@ -1,0 +1,4 @@
+# Generated from each reader's locally fetched news sources.
+/extension/local-reader.html
+__pycache__/
+*.pyc
