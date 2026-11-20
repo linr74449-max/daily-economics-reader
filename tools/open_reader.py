@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 import webbrowser
 from xml.etree import ElementTree
 
@@ -83,7 +84,23 @@ def prepare():
     return OUTPUT
 
 
-if __name__=="__main__":
-    path=prepare()
-    if "--prepare" not in sys.argv:
-        webbrowser.open(path.as_uri())
+def cloud_reader():
+    try:
+        settings = json.loads((EXT / "owner-edition.json").read_text(encoding="utf-8"))
+        url = settings["url"]
+        parsed = urlsplit(url)
+        if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password:
+            return url
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return None
+
+
+if __name__ == "__main__":
+    cloud = cloud_reader()
+    if "--prepare" in sys.argv:
+        prepare()
+    elif cloud and "--offline" not in sys.argv:
+        webbrowser.open(cloud)
+    else:
+        webbrowser.open(prepare().as_uri())

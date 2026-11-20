@@ -1,4 +1,11 @@
 # Generated from each reader's locally fetched news sources.
 /extension/local-reader.html
+/extension/owner-edition.json
+/.daily-site/
+/.public-site/
+/hosting/*
+!/hosting/public_worker.mjs
+!/hosting/build_public.py
+/.daily-site-release.tar.gz
 __pycache__/
 *.pyc

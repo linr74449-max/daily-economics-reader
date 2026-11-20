@@ -21,6 +21,7 @@ function serial(s){return String(ISSUES.indexOf(s)+1).padStart(3,"0");}
 function art(s){
   const f=el("figure","artwork");
   if(s.image){f.append(img(s.image,s.alt));return f;}
+  if(!["2026-11-20","2026-11-21"].includes(s.date)){f.append(gridTable(s));return f;}
   const game=s.track==="博弈论";
   f.classList.add("type-art",game?"art-game":"art-choice");
   const left=el("div","art-half"),right=el("div","art-half");
@@ -58,47 +59,101 @@ async function recent(section,s,today){
   if(location.protocol!=="chrome-extension:"&&!snapshot){section.append(el("p","caption","离线预览 · 通过一键启动器或浏览器扩展打开，可自动读取官方发布。"));return;}
   const status=el("p","caption","正在读取官方发布…");status.setAttribute("role","status");section.append(status);
   const {items,fresh,count}=snapshot?PolicyDesk.fromSnapshot(JSON.parse(snapshot.textContent),today):await PolicyDesk.load(today);if(!section.isConnected)return;
-  const selected=items.slice(0,s.clip?1:2);
+  const selected=items.slice(0,Math.max(0,2-(s.clips??(s.clip?[s.clip]:[])).length));
   status.textContent=(fresh===count?"已检查全部官方来源":fresh?"已更新 "+fresh+" / "+count+" 个官方来源":"官方来源暂时未能更新")+(selected.length?(selected.some(i=>i.cached)?" · 含可用缓存":""):" · 暂无可展示的近期发布");
   for(const n of selected){const card=el("div","news-item");add(card,el("small","",n.source+" · "+pretty(n.date)+(n.updated?" 更新":" 发布")),link(n.title+" ↗",n.url,"news-title"),el("p","","阅读角度 · "+n.concept+"。"+n.explain));section.append(card);}
 }
 function article(s,today,home){
   main.replaceChildren();
-  if(!s){head(main,"编排日程","首期将于 "+pretty(ISSUES[0].date)+" 刊发");main.append(issueLine(ISSUES[0],today));return;}
+  if(!s){head(main,"编排日程","当期尚未出版");return;}
   const hero=el("section","cover");const left=el("div","cover-copy");
   const label=home&&s.date<today?"最近一期":state(s,today);
   add(left,el("p","eyebrow",label+"  /  VOL. "+serial(s)),titleBlock(s),el("p","deck",s.lead));
   const buttons=el("div","actions");const start=el("button","primary","开始阅读 ↓");start.onclick=()=>document.getElementById("lesson").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion:reduce)").matches?"instant":"smooth"});
-  add(buttons,start,link("Figma 图解 ↗",s.figma,"text-link"));left.append(buttons);const visual=el("div","cover-visual");
+  buttons.append(start);if(s.figma)buttons.append(link("Figma 图解 ↗",s.figma,"text-link"));left.append(buttons);const visual=el("div","cover-visual");
   add(visual,art(s),add(el("div","art-caption"),el("span","",s.concept),el("span","",pretty(s.date))));
   add(hero,left,visual);main.append(hero);
   const spread=el("div","spread"),body=el("article","article");body.id="lesson";
   add(body,textBlock("生活现场",s.storyTitle,s.story),gridTable(s),textBlock("经济学概念",s.concept,s.meaning),textBlock("再往前一步",s.deeperTitle,s.deeper));
+  if(s.decisionTakeaway){
+    const closing=el("section","chapter");
+    body.append(add(closing,el("h2","","用在下一次选择"),el("p","body-copy",s.decisionTakeaway)));
+  }
   const side=el("aside","margin");const map=el("section","sidebox");add(map,el("p","eyebrow","学习坐标"),el("h3","",s.track),el("p","",s.concept),link("展开知识地图 →","#map","text-link"));side.append(map);
-  if(s.clip)side.append(historical(s.clip));
+  for(const clip of s.clips??(s.clip?[s.clip]:[]))side.append(historical(clip));
   const sources=el("details","sources");sources.append(el("summary","","资料与出处"));s.sources.forEach(src=>sources.append(sourceLink(src)));if(s.art)sources.append(sourceLink(["本期 Canva 配图",s.art]));
   add(body,sources,mark(s));add(spread,body,side);main.append(spread);
-  if(home || s.date===today){const desk=el("section","policy-desk");main.append(desk);recent(desk,s,today);}
+  if((home || s.date===today)&&location.protocol!=="https:"){const desk=el("section","policy-desk");main.append(desk);recent(desk,s,today);}
 }
 function archive(today){
-  main.replaceChildren();head(main,"按刊期阅读","期刊架");const released=ISSUES.filter(s=>s.date<=today).reverse(),next=ISSUES.filter(s=>s.date>today);
-  for(const [name,group] of [["已刊发",released],["已排期 · 可预读",next]]){if(!group.length)continue;const area=el("section","issue-list");area.append(el("h2","",name));group.forEach(s=>area.append(issueLine(s,today)));main.append(area);}
+  main.replaceChildren();head(main,"按刊期阅读","期刊架");
+  const area=el("section","issue-list");ISSUES.filter(s=>s.date<=today).reverse().forEach(s=>area.append(issueLine(s,today)));main.append(area);
 }
 function mapPage(today){
-  main.replaceChildren();head(main,"从家庭选择到整个经济","知识地图");const group=el("div","map-grid");for(const [name,heading,path] of tracks){const card=el("section","map-card");add(card,el("p","eyebrow",name),el("h2","",heading),el("p","path",path));const editions=ISSUES.filter(s=>s.track===name);
+  main.replaceChildren();head(main,"从家庭选择到整个经济","知识地图");const group=el("div","map-grid");for(const [name,heading,path] of tracks){const card=el("section","map-card");add(card,el("p","eyebrow",name),el("h2","",heading),el("p","path",path));const editions=ISSUES.filter(s=>s.track===name&&s.date<=today);
   if(!editions.length)card.append(el("small","caption","规划中的学习线"));editions.forEach(s=>card.append(link(s.concept+" · "+state(s,today)+" ↗","#issue/"+s.date,"concept-link")));group.append(card);}main.append(group);
 }
-let renderedDate="";
-function render(reset=false){
+let renderedDate="", syncState="checking", renderId=0;
+let lastCheck=0, refreshing=false;
+function notice(message){
+  const n=document.getElementById("publication-status");
+  if(n){n.textContent=message;n.hidden=!message;}
+}
+function homeNotice(s,today){
+  if(syncState==="offline")return "暂时无法检查新刊 · 当前阅读 "+pretty(s.date);
+  if(s.date===today)return "";
+  return (syncState==="checking"?"正在检查新刊":"今日待刊")+" · 最近一期 "+pretty(s.date);
+}
+async function render(reset=false){
+  const id=++renderId;
   const today=day(),hash=location.hash.slice(1);renderedDate=today;document.getElementById("clock").textContent=pretty(today);
+  notice("");
   const nav=hash==="map"?"map":(hash==="archive"||hash.startsWith("issue/"))?"archive":"today";
   for(const a of document.querySelectorAll("nav a")){if(a.dataset.nav===nav)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");}
-  if(hash==="map")mapPage(today);else if(hash==="archive")archive(today);else{const specific=hash.startsWith("issue/")?ISSUES.find(s=>s.date===hash.slice(6)):null;if(hash.startsWith("issue/")&&!specific)archive(today);else article(specific||todayIssue(today),today,!specific);}
+  if(hash==="map")mapPage(today);
+  else if(hash==="archive")archive(today);
+  else{
+    const byDate=hash.startsWith("issue/");
+    const row=byDate?ISSUES.find(s=>s.date===hash.slice(6)&&s.date<=today):todayIssue(today);
+    if(!row && byDate)archive(today);
+    else {
+      let issue=row;
+      if(row&&!row.story){
+        main.replaceChildren(el("p","caption","正在读取 "+pretty(row.date)+" 的期刊…"));
+        try { issue=await SharedJournal.read(row); }
+        catch {
+          if(id!==renderId)return;
+          issue=null;
+          if(!byDate){
+            for(const older of ISSUES.filter(s=>s.date<row.date).reverse()){
+              try{issue=await SharedJournal.read(older,true);}catch{}
+              if(issue)break;
+            }
+          }
+          if(id!==renderId)return;
+          notice(issue?"新刊暂时无法下载 · 当前阅读 "+pretty(issue.date):"本期暂时无法下载，请稍后再打开。");
+        }
+        if(id!==renderId)return;
+      }
+      if(issue||!row)article(issue,today,!byDate);
+      else main.replaceChildren(link("返回期刊架","#archive"));
+      if(issue&&!byDate&&issue.date===row.date)notice(homeNotice(issue,today));
+    }
+  }
   if(reset){window.scrollTo(0,0);main.focus({preventScroll:true});}
 }
 window.addEventListener("hashchange",()=>render(true));
 document.querySelector(".skip").onclick=event=>{event.preventDefault();main.focus();};
-function syncDate(){if(day()!==renderedDate)render();}
+async function checkShared(force=false){
+  if(typeof SharedJournal==="undefined"||refreshing||(!force&&Date.now()-lastCheck<120000))return;
+  refreshing=true;lastCheck=Date.now();
+  try { await SharedJournal.refresh(day());syncState="ready"; }
+  catch { syncState="offline"; }
+  finally {refreshing=false;render();}
+}
+function syncDate(){if(day()!==renderedDate){render();checkShared(true);}else if(!document.hidden&&todayIssue(day())?.date!==day())checkShared();}
 window.addEventListener("focus",syncDate);document.addEventListener("visibilitychange",()=>{if(!document.hidden)syncDate();});
 window.addEventListener("storage",e=>{if(e.key==="econ.read")render();});
-setInterval(syncDate,30000);render();
+window.addEventListener("online",()=>checkShared(true));
+if(typeof SharedJournal!=="undefined")SharedJournal.restore(day());
+setInterval(syncDate,30000);render();checkShared(true);

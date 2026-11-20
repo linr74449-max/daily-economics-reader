@@ -3,7 +3,9 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -47,7 +49,7 @@ def wait(fn, timeout=18):
     raise RuntimeError("Timed out waiting for browser")
 
 
-def check():
+def check(public=False):
     extension = ROOT / "extension"
     key = json.loads((extension/"manifest.json").read_text(encoding="utf-8"))["key"]
     digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
@@ -55,6 +57,13 @@ def check():
     url = f"chrome-extension://{extension_id}/index.html"
     local_url = (extension/"local-reader.html").as_uri()
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profile:
+        if public:
+            test_extension = Path(profile) / "unpacked-reader"
+            shutil.copytree(extension,test_extension,ignore=shutil.ignore_patterns("owner-edition.json","local-reader.html"))
+            # Simulate an installed version from before the latest actual issue.
+            first = json.loads(sorted((ROOT / "published").glob("????-??-??.json"))[0].read_bytes())
+            (test_extension/"catalog.js").write_text("const ISSUES = "+json.dumps([first])+";",encoding="utf-8")
+            extension=test_extension
         process = subprocess.Popen([str(EDGE), "--headless=new", "--disable-gpu", "--no-first-run",
             "--no-default-browser-check", "--disable-background-networking", "--remote-debugging-port=0",
             "--window-size=1340,880", f"--user-data-dir={profile}", f"--load-extension={extension}",
@@ -76,9 +85,22 @@ def check():
             assert extension_id in ids
             tab.call("Page.navigate",url=url)
             wait(lambda: tab.js("!!document.querySelector('.cover-title')"))
-            assert tab.js("ISSUES.length") >= 4
+            if public:
+                latest=json.loads((ROOT/"published/index.json").read_bytes())[-1]
+                title=json.dumps(latest["title"])
+                loaded="document.querySelector('.cover-title')?.textContent === "+title
+                wait(lambda:tab.js(loaded),timeout=40)
+                assert tab.js("syncState === 'ready'")
+                tab.call("Network.enable")
+                tab.call("Network.emulateNetworkConditions",offline=True,latency=0,downloadThroughput=0,uploadThroughput=0)
+                tab.call("Page.reload")
+                wait(lambda:tab.js(loaded+" && syncState==='offline'"),timeout=30)
+                assert tab.js("document.querySelectorAll('tbody tr').length") >= 1
+                print("Verified anonymous cloud download and offline reload of", latest["date"], latest["title"])
+                return
+            assert tab.js("ISSUES.length") >= 2
             assert tab.js("PolicyDesk.day('2026-11-19T16:00:00Z')") == "2026-11-20"
-            assert tab.js("todayIssue('2026-11-21').concept") == "最优反应"
+            assert tab.js("todayIssue('2026-11-20').concept") == "机会成本"
             assert tab.js("todayIssue('2026-11-18')") is None
             assert tab.js("todayIssue('9999-12-31').date === ISSUES.at(-1).date")
             wait(lambda: tab.js("document.querySelector('.policy-desk [role=status]')?.textContent?.includes('来源')"),timeout=18)
@@ -88,7 +110,7 @@ def check():
             (Path(profile)/"reader.png").write_bytes(base64.b64decode(shot["data"]))
             if os.getenv("ECON_PREVIEW_PATH"):
                 Path(os.environ["ECON_PREVIEW_PATH"]).write_bytes(base64.b64decode(shot["data"]))
-            for issue in tab.js("ISSUES.map(i=>i.date)"):
+            for issue in tab.js("ISSUES.filter(i=>i.date<=day()).map(i=>i.date)"):
                 tab.js(f"location.hash='issue/{issue}'")
                 wait(lambda: tab.js("document.querySelector('.art-caption')?.textContent.endsWith('"+issue.replace("-",".")+"')"))
                 assert tab.js("document.querySelectorAll('tbody tr').length") >= 2
@@ -97,7 +119,7 @@ def check():
             tab.call("Page.reload")
             wait(lambda: tab.js("document.querySelector('.mark')?.ariaPressed==='true'"))
             tab.js("location.hash='map'");wait(lambda: tab.js("document.querySelectorAll('.map-card').length===6"))
-            tab.js("location.hash='archive'");wait(lambda: tab.js("document.querySelectorAll('.issue-line').length>=4"))
+            tab.js("location.hash='archive'");wait(lambda: tab.js("!!document.querySelector('.issue-list') && document.querySelectorAll('.issue-line').length===ISSUES.filter(i=>i.date<=day()).length"))
             tab.call("Emulation.setDeviceMetricsOverride",width=360,height=760,deviceScaleFactor=1,mobile=True)
             tab.js("location.hash='today'");wait(lambda: tab.js("!!document.querySelector('.cover-title')"))
             assert tab.js("document.documentElement.scrollWidth<=innerWidth")
@@ -105,7 +127,7 @@ def check():
                 tab.call("Page.navigate",url=local_url)
                 wait(lambda:tab.js("!!document.querySelector('#offline-feeds') && !!document.querySelector('.policy-desk [role=status]')"))
                 print("Local edition:",tab.js("document.querySelector('.policy-desk [role=status]').textContent"))
-            print("Verified extension installation, four issues, date changes, read state, archive, map, local reader and mobile width.")
+            print("Verified extension installation, published issues, date changes, read state, archive, map, local reader and mobile width.")
         finally:
             if browser:
                 try:
@@ -121,4 +143,4 @@ def check():
 
 
 if __name__ == "__main__":
-    check()
+    check(public="--check-public" in sys.argv)
