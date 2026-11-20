@@ -1,0 +1,33 @@
+name: 同步已刊期刊
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-editions.yml'
+      - 'tools/sync_public.py'
+  schedule:
+    - cron: '17 0,4,12 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: mirror-published-editions
+  cancel-in-progress: false
+jobs:
+  archive:
+    if: github.repository == 'linr74449-max/daily-economics-reader'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+      - name: 核对读者版并更新归档
+        run: |
+          python3 tools/sync_public.py
+          git add -- published extension/catalog.js
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m '同步已公开的经济学日刊'
+            git push origin HEAD:main
+          fi
