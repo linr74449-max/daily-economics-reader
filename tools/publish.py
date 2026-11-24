@@ -28,7 +28,10 @@ def validate(path, *, public=False):
             raise ValueError(f"{path.name}: empty or invalid decisionTakeaway")
     if date.fromisoformat(issue["date"]).isoformat() != path.stem or issue["track"] not in TRACKS:
         raise ValueError(f"{path.name}: date or learning track")
-    if (not public or "figma" in issue) and not https(issue.get("figma",""), {"www.figma.com", "figma.com"}):
+    original = issue.get("designFormat") == "original-graphic"
+    if original and (not issue.get("image") or not issue.get("alt")):
+        raise ValueError(f"{path.name}: original graphic requires an image and alt text")
+    if (("figma" in issue) or (not public and not original)) and not https(issue.get("figma",""), {"www.figma.com", "figma.com"}):
         raise ValueError(f"{path.name}: Figma issue URL")
     if "image" in issue:
         image = issue["image"]
@@ -37,7 +40,7 @@ def validate(path, *, public=False):
         else:
             asset = (EXT / image).resolve()
             valid_image = asset.is_relative_to(EXT / "assets") and asset.is_file()
-        if not valid_image or not issue.get("alt") or (not public and not https(issue["art"], {"canva.link", "www.canva.com"})):
+        if not valid_image or not issue.get("alt") or (not public and not original and not https(issue.get("art",""), {"canva.link", "www.canva.com"})):
             raise ValueError(f"{path.name}: artwork or credit")
     if len(issue["columns"]) < 2 or not issue["rows"] or any(len(r) != len(issue["columns"]) for r in issue["rows"]):
         raise ValueError(f"{path.name}: inconsistent table columns")
